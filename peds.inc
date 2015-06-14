@@ -1,5 +1,5 @@
 /*
-	PEDs Include (peds.inc)
+	PEDs Include (peds.inc) R2
 	* Since samp 0.3.7 have actors system(which is coolest upgrade ever!), i have planned on peds(tpe of npcs) creator using pawn (not C++)
 	* This include let you make AI and cool effects and peds without writing thier AI.
 	* Well, this can be useful for making shopkeepers, body guards, dead bodies and lot more...

@@ -2,7 +2,7 @@
 	PEDs Include (peds.inc)
 	* Since samp 0.3.7 have actors system(which is coolest upgrade ever!), i have planned on peds(tpe of npcs) creator using pawn (not C++)
 	* This include let you make AI and cool effects and peds without writing thier AI.
-	* SAMP have provided collisions for actors, which is Awesome and for you as well, cause now ped will collide!
+	* Well, this can be useful for making shopkeepers, body guards, dead bodies and lot more...
 
  	Author: (creator)
 	* Gammix
@@ -10,14 +10,13 @@
 	Contributors:
 	* Pottus - ideas and improvement
 	* a_angles - took help for making the ped face points
-	* seif - took help from bodyparts code
 
 	(c) Copyright 2015
   	* This file is provided as is (no warranties).
 */
 /*
 FUNCTIONS:
-native PED_Connect(skin, Float:x, Float:y, Float:z, Float:rotation = 0.0);
+native PED_Connect(skin, Float:x, Float:y, Float:z, Float:rotation = 0.0, Float:health = 100.0, bool:invulnerable = false);
 native PED_IsConnected(pedid);
 native PED_Disconnect(pedid);
 native PED_SetPos(pedid, Float:x, Float:y, Float:z);
@@ -26,108 +25,67 @@ native PED_SetFacingAngle(pedid, Float:angle);
 native PED_GetFacingAngle(pedid, &Float:angle);
 native PED_SetVirtualWorld(pedid, world);
 native PED_GetVirtualWorld(pedid);
-native PED_IsInRangeOfPoint(pedid, Float:range, Float:x, Float:y, Float:z);
+native PED_ToggleInvulnerable(pedid, bool:toggle);
+native PED_IsInvulnerable(pedid);
 native PED_SetFacingPoint(pedid, Float:x, Float:y);
 native PED_IsFacingPoint(pedid, Float:x, Float:y, Float:range = 10.0);
 native PED_SetFacingPlayer(pedid, playerid);
-native PED_IsFacingPlayer(pedid, playerid);
+native PED_IsFacingPlayer(pedid, playerid, Float:range =  10.0);
 native PED_IsBehindPlayer(pedid, playerid, Float:range = 10.0);
+native PED_IsInRangeOfPoint(pedid, Float:range, Float:x, Float:y, Float:z);
 native PED_SetHealth(pedid, Float:health);
 native PED_GetHealth(pedid, &Float:health);
-native PED_GotoPoint(pedid, Float:x, Float:y, Float:z, bool:walk = false);
-native PED_FollowPlayer(pedid, playerid);
-native PED_GetFollowingPlayer(pedid);
-native PED_ApplyAnimation(pedid, animlib[], animname[], Float:fDelta, loop, lockx, locky, freeze, time);
+native PED_IsDead(pedid);
+native PED_ApplyAnimation(pedid, animlib[], animname[], Float:fDelta = 4.1, loop = 0, lockx = 1, locky = 1, freeze = 1, time = 0);
 native PED_Stop(pedid);
 native PED_Spawn(pedid);
-native PED_SetSpawnInfo(pedid, Float:x, Float:y, Float:z, Float:rotation);
-native PED_IsMoving(pedid);
-native PED_SetWalkingStyle(pedid, walkingstyle);
-native PED_GetWalkingStyle(pedid);
-native PED_SetRunningStyle(pedid, runningstyle);
-native PED_GetRunningStyle(pedid);
-native PED_GetState(pedid);
+native PED_SetSpawnInfo(pedid, Float:x, Float:y, Float:z, Float:rotation, Float:health);
 native PED_IsStreamedIn(pedid, forplayerid);
+native PED_PlaySound(pedid, soundid);
 native _
-native IsPlayerLookingAtPED(playerid, pedid);
+native GetPlayerCameraTargetPED(playerid);
 native GetPlayerTargetPED(playerid);
 
 CALLBACKS:
-public PED_OnConnect(pedid);
-public PED_OnDisconnect(pedid);
-public PED_OnSpawn(pedid);
-public PED_OnReachDestination(pedid, Float:x, Float:y, Float:z);
-public PED_OnStateChange(pedid, newstate, oldstate);
-public PED_OnStreamIn(pedid, forplayerid);
-public PED_OnStreamOut(pedid, forplayerid);
+public PED_OnConnect(pedid)
+public PED_OnDisconnect(pedid)
+public PED_OnSpawn(pedid)
+public PED_OnTakeDamage(pedid, issuerid, weaponid, Float:amount, bodypart)
+public PED_OnDeath(pedid, killerid, weaponid)
+public PED_OnStreamIn(pedid, forplayerid)
+public PED_OnStreamOut(pedid, forplayerid)
+public PED_OnUpdate(pedid)
+
+public OnPlayerTargetPED(playerid, pedid, weaponid)
+public OnPlayerGivePEDDamage(playerid, pedid, weaponid, Float:amount, bodypart)
 */
+
+#if ! defined foreach_player
+	#define foreach_player(%1) for(new %1; %1 <= GetPlayerPoolSize(); %1++) if(IsPlayerConnected(%1))
+#endif
 
 //just kiding !:D!
 #define INVALID_PED_ID  INVALID_ACTOR_ID
-
-//walking styles
-#define PED_WALKING_DEFAULT    	0
-#define PED_WALKING_NORMAL     	1
-#define PED_WALKING_GANGSTA    	2
-#define PED_WALKING_GANGSTA2   	3
-#define PED_WALKING_OLD        	4
-#define PED_WALKING_FAT_OLD    	5
-#define PED_WALKING_FAT        	6
-#define PED_WALKING_LADY        7
-#define PED_WALKING_LADY2      	8
-#define PED_WALKING_WHORE      	9
-#define PED_WALKING_WHORE2     	10
-#define PED_WALKING_DRUNK     	11
-#define PED_WALKING_BLIND     	12
-#define PED_WALKING_ARMED       13
-
-//ped states
-#define PED_STATE_ONFOOT        0
-#define PED_STATE_WALKING       1
-#define PED_STATE_RUNNING       2
-
-//running styles
-#define PED_RUNNING_DEFAULT    	0
-#define PED_RUNNING_NORMAL     	1
-#define PED_RUNNING_GANGSTA    	2
-#define PED_RUNNING_GANGSTA2   	3
-#define PED_RUNNING_OLD        	4
-#define PED_RUNNING_FAT_OLD    	5
-#define PED_RUNNING_FAT        	6
-#define PED_RUNNING_LADY        7
-#define PED_RUNNING_LADY2      	8
-#define PED_RUNNING_WHORE      	9
-#define PED_RUNNING_WHORE2     	10
-#define PED_RUNNING_DRUNK     	11
-#define PED_RUNNING_BLIND     	12
-#define PED_RUNNING_ARMED       13
+#define MAX_PEDS  		MAX_ACTORS
 
 enum PedEnum
 {
-	bool:P_EXIST,
+    P_SKIN,
 	Float:P_X,
 	Float:P_Y,
 	Float:P_Z,
 	Float:P_ROT,
-	P_TIMER,
 	Float:P_HEALTH,
-	Float:P_GOTOX,
-	Float:P_GOTOY,
-	Float:P_GOTOZ,
-	P_STATE,
-	P_WALKSTYLE,
-	P_RUNSTYLE,
-	P_FOLLOWING,
-	bool:P_FOLLOWINGWALK
+	P_DEATHTIMER
 }
-static gPED[MAX_ACTORS][PedEnum];
+static gPED[MAX_PEDS][PedEnum];
 
-//looking at ped function
-static gPlayerLooking[MAX_ACTORS];
+//player targeting a ped!
+static gPlayerTarget[MAX_PLAYERS];
 
 public OnPlayerConnect(playerid)
 {
-	gPlayerLooking[playerid] = INVALID_PED_ID;
+	gPlayerTarget[playerid] = INVALID_PED_ID;
 
 	#if defined HoOK_OnPlayerConnect
 		HoOK_OnPlayerConnect(playerid);
@@ -145,12 +103,12 @@ public OnPlayerConnect(playerid)
 #endif
 
 //internal functions
-stock Float:PED_GetDistance(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
+stock static Float:PED_GetDistance(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
 	return floatsqroot( (( x1 - x2 ) * ( x1 - x2 )) + (( y1 - y2 ) * ( y1 - y2 )) + (( z1 - z2 ) * ( z1 - z2 )) );
 }
 
-stock PED_AngleInRangeOfAngle(Float:a1, Float:a2, Float:range = 10.0)
+stock static PED_AngleInRangeOfAngle(Float:a1, Float:a2, Float:range = 10.0)
 {
 	a1 -= a2;
 	if((a1 < range) && (a1 > -range)) return true;
@@ -158,56 +116,47 @@ stock PED_AngleInRangeOfAngle(Float:a1, Float:a2, Float:range = 10.0)
 }
 
 //include funcions
-stock PED_Connect(skin, Float:x, Float:y, Float:z, Float:rotation = 0.0)
+stock PED_Connect(skin, Float:x, Float:y, Float:z, Float:rotation = 0.0, Float:health = 100.0, bool:invulnerable = false)
 {
 	if(skin < 0 || skin > 311) return INVALID_PED_ID;
 
 	new _actor = CreateActor(skin, x, y, z, rotation);
-
 	if(_actor == INVALID_PED_ID) return INVALID_PED_ID;
 
-	gPED[_actor][P_EXIST] = true;
+   	gPED[_actor][P_SKIN] = skin;
  	gPED[_actor][P_X] = x;
  	gPED[_actor][P_Y] = y;
   	gPED[_actor][P_Z] = z;
    	gPED[_actor][P_ROT] = rotation;
-	gPED[_actor][P_HEALTH] = 100.0;
- 	gPED[_actor][P_GOTOX] = -1000.0;
-	gPED[_actor][P_GOTOY] = -1000.0;
-	gPED[_actor][P_GOTOZ] = -1000.0;
-	gPED[_actor][P_WALKSTYLE] = 0;
-	gPED[_actor][P_RUNSTYLE] = 0;
-	gPED[_actor][P_STATE] = PED_STATE_ONFOOT;
-	gPED[_actor][P_FOLLOWING] = INVALID_PLAYER_ID;
-	gPED[_actor][P_FOLLOWINGWALK] = false;
-
-   	gPED[_actor][P_TIMER] = SetTimerEx("PED_OnTimeUpdate", 100, true, "i", _actor);
+   	gPED[_actor][P_HEALTH] = health;
+   	SetActorHealth(_actor, health);
+   	gPED[_actor][P_DEATHTIMER] = -1;
+   	SetActorInvulnerable(_actor, invulnerable);
 
 	CallLocalFunction("PED_OnConnect", "i", _actor);
 	CallLocalFunction("PED_OnSpawn", "i", _actor);
 	return _actor;
 }
 
-stock PED_IsConnected(pedid) return gPED[pedid][P_EXIST];
+#define PED_IsConnected IsValidActor//validity checker
 
 stock PED_Disconnect(pedid)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	gPED[pedid][P_EXIST] = false;
+	if(gPED[pedid][P_DEATHTIMER] != -1) KillTimer(gPED[pedid][P_DEATHTIMER]);
+	gPED[pedid][P_DEATHTIMER] = -1;
 
 	DestroyActor(pedid);
-	KillTimer(gPED[pedid][P_TIMER]);
-
-	CallLocalFunction("PED_OnDisconnect", "i", pedid);
-	return true;
+	return CallLocalFunction("PED_OnDisconnect", "i", pedid);
 }
 
 stock PED_SetPos(pedid, Float:x, Float:y, Float:z)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	return SetActorPos(pedid, x, y, z);
+    if(CallLocalFunction("PED_OnUpdate", "i", pedid)) return SetActorPos(pedid, x, y, z);
+    return false;
 }
 
 stock PED_GetPos(pedid, &Float:x, &Float:y, &Float:z)
@@ -221,7 +170,8 @@ stock PED_SetFacingAngle(pedid, Float:angle)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	return SetActorFacingAngle(pedid, angle);
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid)) return SetActorFacingAngle(pedid, angle);
+    return false;
 }
 
 stock PED_GetFacingAngle(pedid, &Float:angle)
@@ -235,7 +185,8 @@ stock PED_SetVirtualWorld(pedid, world)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	return SetActorVirtualWorld(pedid, world);
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid)) return SetActorVirtualWorld(pedid, world);
+    return false;
 }
 
 stock PED_GetVirtualWorld(pedid)
@@ -245,35 +196,42 @@ stock PED_GetVirtualWorld(pedid)
 	return GetActorVirtualWorld(pedid);
 }
 
-stock PED_IsInRangeOfPoint(pedid, Float:range, Float:x, Float:y, Float:z)
+stock PED_ToggleInvulnerable(pedid, bool:toggle)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	new Float:pos[3];
-	PED_GetPos(pedid, pos[0], pos[1], pos[2]);
+    if(CallLocalFunction("PED_OnUpdate", "i", pedid)) return SetActorInvulnerable(pedid, toggle);
+    return false;
+}
 
-	if(PED_GetDistance(pos[0], pos[1], pos[2], x, y, z) <= range) return true;
-	return false;
+stock PED_IsInvulnerable(pedid)
+{
+	if(! PED_IsConnected(pedid)) return false;
+
+	return IsActorInvulnerable(pedid);
 }
 
 stock PED_SetFacingPoint(pedid, Float:x, Float:y)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	new Float:pX, Float:pY, Float:pZ;
-	PED_GetPos(pedid, pX, pY, pZ);
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid))
+    {
+		new Float:pX, Float:pY, Float:pZ;
+		PED_GetPos(pedid, pX, pY, pZ);
 
-	new Float:angle;
+		new Float:angle;
 
-	if( y > pY ) angle = (-acos((x - pX) / floatsqroot((x - pX)*(x - pX) + (y - pY)*(y - pY))) - 90.0);
-	else if( y < pY && x < pX ) angle = (acos((x - pX) / floatsqroot((x - pX)*(x - pX) + (y - pY)*(y - pY))) - 450.0);
-	else if( y < pY ) angle = (acos((x - pX) / floatsqroot((x - pX)*(x - pX) + (y - pY)*(y - pY))) - 90.0);
+		if( y > pY ) angle = (-acos((x - pX) / floatsqroot((x - pX)*(x - pX) + (y - pY)*(y - pY))) - 90.0);
+		else if( y < pY && x < pX ) angle = (acos((x - pX) / floatsqroot((x - pX)*(x - pX) + (y - pY)*(y - pY))) - 450.0);
+		else if( y < pY ) angle = (acos((x - pX) / floatsqroot((x - pX)*(x - pX) + (y - pY)*(y - pY))) - 90.0);
 
-	if(x > pX) angle = (floatabs(floatabs(angle) + 180.0));
-	else angle = (floatabs(angle) - 180.0);
+		if(x > pX) angle = (floatabs(floatabs(angle) + 180.0));
+		else angle = (floatabs(angle) - 180.0);
 
-	PED_SetFacingAngle(pedid, angle);
- 	return true;
+	 	return PED_SetFacingAngle(pedid, angle);
+	}
+	return false;
 }
 
 stock PED_IsFacingPoint(pedid, Float:x, Float:y, Float:range = 10.0)
@@ -290,8 +248,7 @@ stock PED_IsFacingPoint(pedid, Float:x, Float:y, Float:range = 10.0)
 	else if( Y < y && X < x ) angle = (acos((X - x) / floatsqroot((X - x)*(X - x) + (Y - y)*(Y - y))) - 450.0);
 	else if( Y < y ) angle = (acos((X - x) / floatsqroot((X - x)*(X - x) + (Y - y)*(Y - y))) - 90.0);
 
-	if(PED_AngleInRangeOfAngle(-angle, A, range)) return true;
-	return false;
+	return (PED_AngleInRangeOfAngle(-angle, A, range));
 }
 
 stock PED_SetFacingPlayer(pedid, playerid)
@@ -299,13 +256,17 @@ stock PED_SetFacingPlayer(pedid, playerid)
 	if(! PED_IsConnected(pedid)) return false;
 	if(! IsPlayerConnected(playerid)) return false;
 
-	new Float:pX, Float:pY, Float:pZ;
-	GetPlayerPos(playerid, pX, pY, pZ);
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid))
+    {
+		new Float:pX, Float:pY, Float:pZ;
+		GetPlayerPos(playerid, pX, pY, pZ);
 
-	return PED_SetFacingPoint(pedid, pX, pY);
+		return PED_SetFacingPoint(pedid, pX, pY);
+	}
+    return false;
 }
 
-stock PED_IsFacingPlayer(pedid, playerid)
+stock PED_IsFacingPlayer(pedid, playerid, Float:range =  10.0)
 {
 	if(! PED_IsConnected(pedid)) return false;
 	if(! IsPlayerConnected(playerid)) return false;
@@ -313,7 +274,7 @@ stock PED_IsFacingPlayer(pedid, playerid)
 	new Float:pX, Float:pY, Float:pZ;
 	GetPlayerPos(playerid, pX, pY, pZ);
 
-	return PED_IsFacingPoint(pedid, pX, pY);
+	return PED_IsFacingPoint(pedid, pX, pY, range);
 }
 
 stock PED_IsBehindPlayer(pedid, playerid, Float:range = 10.0)
@@ -325,180 +286,102 @@ stock PED_IsBehindPlayer(pedid, playerid, Float:range = 10.0)
 	PED_GetFacingAngle(pedid, za);
 	GetPlayerFacingAngle(playerid, pa);
 
-	if(PED_AngleInRangeOfAngle(za, pa, range) && PED_IsFacingPlayer(playerid, playerid)) return true;
-	return false;
+	return (PED_AngleInRangeOfAngle(za, pa, range) && PED_IsFacingPlayer(playerid, playerid));
+}
+
+stock PED_IsInRangeOfPoint(pedid, Float:range, Float:x, Float:y, Float:z)
+{
+	if(! PED_IsConnected(pedid)) return false;
+
+	new Float:pos[3];
+	PED_GetPos(pedid, pos[0], pos[1], pos[2]);
+
+	return (PED_GetDistance(pos[0], pos[1], pos[2], x, y, z) <= range);
 }
 
 stock PED_SetHealth(pedid, Float:health)
 {
 	if(! PED_IsConnected(pedid)) return false;
+	if(PED_IsDead(pedid)) return false;
 
-	gPED[pedid][P_HEALTH] = health;
-	return true;
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid))
+	{
+	    if(health <= 0.0)
+	    {
+	    	if(CallLocalFunction("PED_OnDeath", "iii", pedid, INVALID_PLAYER_ID, 0))
+			{
+				if(gPED[pedid][P_DEATHTIMER] != -1) KillTimer(gPED[pedid][P_DEATHTIMER]);
+				gPED[pedid][P_DEATHTIMER] = SetTimerEx("PED_SpawnPlayerAfterDeath", 3 * 1000 + 5 * 100, false, "i", pedid);//spawn after 3.5 seconds
+
+                SetActorHealth(pedid, health);
+			}
+		    else return false;
+		}
+		else return SetActorHealth(pedid, health);
+	}
+	return false;
 }
 
 stock PED_GetHealth(pedid, &Float:health)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	health = gPED[pedid][P_HEALTH];
-	return true;
+	return GetActorHealth(pedid, health);
 }
 
-stock PED_ApplyAnimation(pedid, animlib[], animname[], Float:fDelta, loop, lockx, locky, freeze, time)
+stock PED_IsDead(pedid)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	return ApplyActorAnimation(pedid, animlib, animname, fDelta, loop, lockx, locky, freeze, time);
+	new Float:health;
+	PED_GetHealth(pedid, health);
+	if(health <= 0.0) return true;
+	return false;
 }
 
-stock PED_GotoPoint(pedid, Float:x, Float:y, Float:z, bool:walk = false)
+stock PED_ApplyAnimation(pedid, animlib[], animname[], Float:fDelta = 4.1, loop = 0, lockx = 1, locky = 1, freeze = 1, time = 0)
 {
 	if(! PED_IsConnected(pedid)) return false;
+	if(PED_IsDead(pedid)) return false;
 
-    //PED_Stop(pedid);
-	PED_SetFacingPoint(pedid, x, y);
-
-	if(walk)
-	{
-	    switch(gPED[pedid][P_WALKSTYLE])
-	    {
-			case PED_WALKING_NORMAL: PED_ApplyAnimation(pedid, "PED", "WALK_civi", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_GANGSTA: PED_ApplyAnimation(pedid, "PED", "WALK_gang1", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_GANGSTA2: PED_ApplyAnimation(pedid, "PED", "WALK_gang2", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_OLD: PED_ApplyAnimation(pedid, "PED", "WALK_old", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_FAT_OLD: PED_ApplyAnimation(pedid, "PED", "WALK_fatold", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_FAT: PED_ApplyAnimation(pedid, "PED", "WALK_fat", 4.1, 1, 1, 1, 0, 1);
-			case PED_WALKING_LADY: PED_ApplyAnimation(pedid, "PED", "WOMAN_walknorm", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_LADY2: PED_ApplyAnimation(pedid, "PED", "WOMAN_walkbusy", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_WHORE: PED_ApplyAnimation(pedid, "PED", "WOMAN_walkpro", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_WHORE2: PED_ApplyAnimation(pedid, "PED", "WOMAN_walksexy", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_DRUNK: PED_ApplyAnimation(pedid, "PED", "WALK_drunk", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_BLIND: PED_ApplyAnimation(pedid, "PED", "Walk_Wuzi", 4.1, 1, 1, 1, 1, 0);
-			case PED_WALKING_ARMED: PED_ApplyAnimation(pedid, "PED", "WALK_armed", 4.1, 1, 1, 1, 1, 0);
-			default: PED_ApplyAnimation(pedid, "PED", "WALK_player", 4.1, 1, 1, 1, 1, 0);
-		}
-		CallLocalFunction("PED_OnStateChange", "iii", pedid, PED_STATE_WALKING, gPED[pedid][P_STATE]);
-    	gPED[pedid][P_STATE] = PED_STATE_WALKING;
-	}
-	else
-	{
-	    switch(gPED[pedid][P_RUNSTYLE])
-	    {
-			case PED_RUNNING_NORMAL: PED_ApplyAnimation(pedid, "PED", "run_civi", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_GANGSTA: PED_ApplyAnimation(pedid, "PED", "run_gang1", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_GANGSTA2: PED_ApplyAnimation(pedid, "PED", "run_gang1", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_OLD: PED_ApplyAnimation(pedid, "PED", "run_old", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_FAT_OLD: PED_ApplyAnimation(pedid, "PED", "run_fatold", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_FAT: PED_ApplyAnimation(pedid, "PED", "run_fat", 4.1, 1, 1, 1, 0, 1);
-			case PED_RUNNING_LADY: PED_ApplyAnimation(pedid, "PED", "woman_run", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_LADY2: PED_ApplyAnimation(pedid, "PED", "WOMAN_runbusy", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_WHORE: PED_ApplyAnimation(pedid, "PED", "woman_runpanic", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_WHORE2: PED_ApplyAnimation(pedid, "PED", "WOMAN_runsexy", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_DRUNK: PED_ApplyAnimation(pedid, "PED", "WALK_drunk", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_BLIND: PED_ApplyAnimation(pedid, "PED", "Run_Wuzi", 4.1, 1, 1, 1, 1, 0);
-			case PED_RUNNING_ARMED: PED_ApplyAnimation(pedid, "PED", "run_armed", 4.1, 1, 1, 1, 1, 0);
-			default: PED_ApplyAnimation(pedid, "PED", "run_player", 4.1, 1, 1, 1, 1, 0);
-		}
-		CallLocalFunction("PED_OnStateChange", "iii", pedid, PED_STATE_RUNNING, gPED[pedid][P_STATE]);
-    	gPED[pedid][P_STATE] = PED_STATE_RUNNING;
-	}
-
-    gPED[pedid][P_GOTOX] = x;
-    gPED[pedid][P_GOTOY] = y;
-    gPED[pedid][P_GOTOZ] = z;
-	return true;
-}
-
-stock PED_FollowPlayer(pedid, playerid, bool:walk = false)
-{
-	if(! PED_IsConnected(pedid)) return false;
-	if(! IsPlayerConnected(playerid)) return false;
-    
-	gPED[pedid][P_FOLLOWING] = playerid;
-	gPED[pedid][P_FOLLOWINGWALK] = walk;
-	
-	new Float:pos[3];
-	GetPlayerPos(playerid, pos[0], pos[1], pos[2]);
-    PED_GotoPoint(pedid, pos[0], pos[1], pos[2], walk);
-	return true;
-}
-
-stock PED_GetFollowingPlayer(pedid)
-{
-	if(! PED_IsConnected(pedid)) return false;
-
-	return gPED[pedid][P_FOLLOWING];
-}
-
-stock PED_SetWalkingStyle(pedid, walkingstyle)
-{
-	if(! PED_IsConnected(pedid)) return false;
-	if(walkingstyle < 0 || walkingstyle > 13) return false;
-
-	gPED[pedid][P_WALKSTYLE] = walkingstyle;
-	return true;
-}
-
-stock PED_GetWalkingStyle(pedid)
-{
-	if(! PED_IsConnected(pedid)) return false;
-
-	return gPED[pedid][P_WALKSTYLE];
-}
-
-stock PED_SetRunningStyle(pedid, runningstyle)
-{
-	if(! PED_IsConnected(pedid)) return false;
-
-	gPED[pedid][P_RUNSTYLE] = runningstyle;
-	return true;
-}
-
-stock PED_GetRunningStyle(pedid)
-{
-	if(! PED_IsConnected(pedid)) return false;
-
-	return gPED[pedid][P_RUNSTYLE];
-}
-
-stock PED_GetState(pedid)
-{
-	if(! PED_IsConnected(pedid)) return false;
-
-	return gPED[pedid][P_STATE];
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid)) return ApplyActorAnimation(pedid, animlib, animname, fDelta, loop, lockx, locky, freeze, time);
+    return false;
 }
 
 stock PED_Stop(pedid)
 {
 	if(! PED_IsConnected(pedid)) return false;
+	if(PED_IsDead(pedid)) return false;
 
-    CallLocalFunction("PED_OnStateChange", "iii", pedid, PED_STATE_ONFOOT, gPED[pedid][P_STATE]);//calling !:D!
-
-	gPED[pedid][P_FOLLOWING] = INVALID_PLAYER_ID;
-    gPED[pedid][P_STATE] = PED_STATE_ONFOOT;
-	return ClearActorAnimations(pedid);
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid)) return ClearActorAnimations(pedid);
+	return false;
 }
 
 stock PED_Spawn(pedid)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
-	ClearActorAnimations(pedid);
+	if(CallLocalFunction("PED_OnUpdate", "i", pedid))
+    {
+        new bool:invulnerable = false;
+		if(PED_IsInvulnerable(pedid)) invulnerable = true;
 
-	PED_SetHealth(pedid, 100.0);
-	PED_SetVirtualWorld(pedid, 0);
-	PED_SetPos(pedid, 0.0, 0.0, 0.0);
-	PED_SetPos(pedid, gPED[pedid][P_X], gPED[pedid][P_Y], gPED[pedid][P_Z]);
-	PED_SetFacingAngle(pedid, gPED[pedid][P_ROT]);
-    gPED[pedid][P_STATE] = PED_STATE_ONFOOT;
-	gPED[pedid][P_FOLLOWING] = INVALID_PLAYER_ID;
+        DestroyActor(pedid);
+        CreateActor(gPED[pedid][P_SKIN], gPED[pedid][P_X], gPED[pedid][P_Y], gPED[pedid][P_Z], gPED[pedid][P_ROT]);
+        SetActorHealth(pedid, gPED[pedid][P_HEALTH]);
+        SetActorInvulnerable(pedid, invulnerable);
 
-	CallLocalFunction("PED_OnSpawn", "i", pedid);
-	return true;
+		foreach_player(i)
+	 	{
+			if(gPlayerTarget[i] == pedid) gPlayerTarget[i] = INVALID_PED_ID;
+		}
+
+		CallLocalFunction("PED_OnSpawn", "i", pedid);
+	}
+	return false;
 }
 
-stock PED_SetSpawnInfo(pedid, Float:x, Float:y, Float:z, Float:rotation)
+stock PED_SetSpawnInfo(pedid, Float:x, Float:y, Float:z, Float:rotation, Float:health)
 {
 	if(! PED_IsConnected(pedid)) return false;
 
@@ -506,70 +389,8 @@ stock PED_SetSpawnInfo(pedid, Float:x, Float:y, Float:z, Float:rotation)
     gPED[pedid][P_Y] = y;
     gPED[pedid][P_Z] = z;
     gPED[pedid][P_ROT] = rotation;
+    gPED[pedid][P_HEALTH] = health;
     return true;
-}
-
-//player functions
-stock IsPlayerLookingAtPED(playerid, pedid)
-{
-	if(! PED_IsConnected(pedid)) return false;
-	if(! IsPlayerConnected(playerid)) return false;
-
-	// Get the camera's positions
-	new Float:vx, Float:vy, Float:vz;
-	GetPlayerCameraFrontVector(playerid, vx, vy, vz);
-
-	new Float:cx, Float:cy, Float:cz;
-	GetPlayerCameraPos(playerid, cx, cy, cz);
-
-	new Float:a;
-	GetPlayerFacingAngle(playerid, a);
-
-	//checking distance, setting offset and x,y,z coords!
-	new Float:x, Float:y, Float:z;
-	new Float:offset;
-	for(new Float:d; d < 100.0; d += 0.5)
-	{
-		switch(GetPlayerWeapon(playerid))
-		{
-		    case 24, 29, 22, 23, 25, 26, 27, 28, 32: offset = 0.11;
-		    case 30, 31: offset = 0.07;
-		    case 33, 34: offset = 0.0;
-		}
-	    switch(GetPlayerWeapon(playerid))
-	    {
-	        case 22, 26, 28, 32:
-	        {
-			   	x = vx * d+cx;
-			    y = vy * d+cy;
-	        }
-	        default:
-	        {
-	    		x = cx + (d * floatsin(-a, degrees));
-	    		y = cy + (d * floatcos(-a, degrees));
-	        }
-	    }
-
-	    z = (vz + offset) * d + cz;
-
-		//setting the radius
-		#define	radius 1.5
-
-		//this one is for crouched ped
-		//if(PED_IsInRangeOfPoint(pedid, radius + 0.2, x, y, z + 0.1)) return true;
-
-		if(PED_IsInRangeOfPoint(pedid, radius, x, y, z - 0.8)) return true;
-	}
-	return false;
-}
-
-stock GetPlayerTargetPED(playerid)
-{
-	for(new i; i < MAX_ACTORS; i++)
-	{
-		if(IsPlayerLookingAtPED(playerid, i)) return i;
-	}
-	return INVALID_PED_ID;
 }
 
 stock PED_IsStreamedIn(pedid, forplayerid)
@@ -580,34 +401,62 @@ stock PED_IsStreamedIn(pedid, forplayerid)
 	return IsActorStreamedIn(pedid, forplayerid);
 }
 
-//internal callback
-forward PED_OnTimeUpdate(pedid);
-public PED_OnTimeUpdate(pedid)
+stock PED_PlaySound(pedid, soundid)
 {
-	if(	PED_GetState(pedid) == PED_STATE_RUNNING ||
-		PED_GetState(pedid) == PED_STATE_WALKING)
+	if(! PED_IsConnected(pedid)) return false;
+	if(! IsPlayerConnected(playerid)) return false;
+
+	new Float:ped_pos[3];
+	PED_GetPos(pedid, ped_pos[0], ped_pos[1], ped_pos[2]);
+	foreach_player(i) PlayerPlaySound(i, soundid, ped_pos[0], ped_pos[1], ped_pos[2]);
+	return true;
+}
+
+//player functions
+stock GetPlayerCameraTargetPED(playerid)
+{
+	if(! IsPlayerConnected(playerid)) return false;
+
+	return GetPlayerCameraTargetActor(playerid);
+}
+
+stock GetPlayerTargetPED(playerid)
+{
+	if(! IsPlayerConnected(playerid)) return false;
+
+	return GetPlayerTargetActor(playerid);
+}
+
+public OnPlayerUpdate(playerid)
+{
+	new target_ped = GetPlayerTargetPED(playerid);
+	if(target_ped != INVALID_PED_ID)
 	{
-	    if(PED_IsInRangeOfPoint(pedid, 2.0, gPED[pedid][P_GOTOX], gPED[pedid][P_GOTOY], gPED[pedid][P_GOTOZ]))//will be adding a better version when actors include gets an update from Kalcor*!
-     	{
-     	    print("REACHED");
-     	    PED_Stop(pedid);
-     	    CallLocalFunction("PED_OnReachDestination", "ifff", pedid, gPED[pedid][P_GOTOX], gPED[pedid][P_GOTOY], gPED[pedid][P_GOTOZ]);
-     	    
-     	    if(gPED[pedid][P_FOLLOWING] != INVALID_PLAYER_ID)
-     	    {
-				new Float:pos[3];
-				GetPlayerPos(gPED[pedid][P_FOLLOWING], pos[0], pos[1], pos[2]);
-			    PED_GotoPoint(pedid, pos[0], pos[1], pos[2], gPED[pedid][P_FOLLOWINGWALK]);
-     	    }
-     	    return 1;
-     	}
+	    if(gPlayerTarget[playerid] != target_ped)
+	    {
+	        gPlayerTarget[playerid] = target_ped;
+	        CallLocalFunction("OnPlayerTargetPED", "iii", playerid, target_ped, GetPlayerWeapon(playerid));
+	    }
 	}
+
+	#if defined HoOK_OnPlayerUpdate
+		HoOK_OnPlayerUpdate(playerid);
+	#endif
 	return 1;
 }
+#if defined _ALS_OnPlayerUpdate
+	#undef OnPlayerUpdate
+#else
+	#define _ALS_OnPlayerUpdate
+#endif
+#define OnPlayerUpdate HoOK_OnPlayerUpdate
+#if defined HoOK_OnPlayerUpdate
+	forward HoOK_OnPlayerUpdate(playerid);
+#endif
 
 public OnActorStreamIn(actorid, forplayerid)
 {
-	if(gPED[actorid][P_EXIST]) CallLocalFunction("PED_OnStreamIn", "ii", actorid, forplayerid);
+	if(PED_IsConnected(actorid)) CallLocalFunction("PED_OnStreamIn", "ii", actorid, forplayerid);
 
 	#if defined HoOK_OnActorStreamIn
 		HoOK_OnActorStreamIn(actorid, forplayerid);
@@ -626,7 +475,7 @@ public OnActorStreamIn(actorid, forplayerid)
 
 public OnActorStreamOut(actorid, forplayerid)
 {
-	if(gPED[actorid][P_EXIST]) CallLocalFunction("PED_OnStreamOut", "ii", actorid, forplayerid);
+	if(PED_IsConnected(actorid)) CallLocalFunction("PED_OnStreamOut", "ii", actorid, forplayerid);
 
 	#if defined HoOK_OnActorStreamOut
 		HoOK_OnActorStreamOut(actorid, forplayerid);
@@ -643,10 +492,66 @@ public OnActorStreamOut(actorid, forplayerid)
 	forward HoOK_OnActorStreamOut(actorid, forplayerid);
 #endif
 
+public OnPlayerGiveDamageActor(playerid, damaged_actorid, Float:amount, weaponid, bodypart)
+{
+
+	if(! PED_IsInvulnerable(damaged_actorid))
+	{
+	    if(! PED_IsDead(damaged_actorid))
+		{
+			if(! CallLocalFunction("PED_OnTakeDamage", "iiifi", damaged_actorid, playerid, weaponid, amount, bodypart))
+			{
+			    CallLocalFunction("OnPlayerGivePEDDamage", "iiifi", playerid, damaged_actorid, weaponid, amount, bodypart);
+				return 0;
+			}
+			else
+			{
+			    new Float:ped_health;
+				PED_GetHealth(damaged_actorid, ped_health);
+				ped_health -= amount;
+
+			    CallLocalFunction("OnPlayerGivePEDDamage", "iiifi", playerid, damaged_actorid, weaponid, amount, bodypart);
+				if(ped_health <= 0.0)//if the ped is dead
+				{
+					if(CallLocalFunction("PED_OnDeath", "iii", damaged_actorid, playerid, weaponid))
+					{
+						SetActorHealth(damaged_actorid, 0.0);
+
+						if(gPED[damaged_actorid][P_DEATHTIMER] != -1) KillTimer(gPED[damaged_actorid][P_DEATHTIMER]);
+						gPED[damaged_actorid][P_DEATHTIMER] = SetTimerEx("PED_SpawnPlayerAfterDeath", 3 * 1000 + 5 * 100, false, "i", damaged_actorid);//spawn after 3.5 seconds
+					}
+				}
+				else SetActorHealth(damaged_actorid, ped_health);
+			}
+		}
+	}
+
+	#if defined HoOK_OnPlayerGiveDamageActor
+		HoOK_OnPlayerGiveDamageActor(playerid, damaged_actorid, Float:amount, weaponid, bodypart);
+	#endif
+	return 1;
+}
+#if defined _ALS_OnPlayerGiveDamageActor
+	#undef OnPlayerGiveDamageActor
+#else
+	#define _ALS_OnPlayerGiveDamageActor
+#endif
+#define OnPlayerGiveDamageActor HoOK_OnPlayerGiveDamageActor
+#if defined HoOK_OnPlayerGiveDamageActor
+	forward HoOK_OnPlayerGiveDamageActor(playerid, damaged_actorid, Float:amount, weaponid, bodypart);
+#endif
+
+forward PED_SpawnPlayerAfterDeath(pedid);
+public PED_SpawnPlayerAfterDeath(pedid)	return (gPED[pedid][P_DEATHTIMER] = -1, PED_Spawn(pedid));
+
 forward PED_OnConnect(pedid);
 forward PED_OnDisconnect(pedid);
 forward PED_OnSpawn(pedid);
-forward PED_OnReachDestination(pedid, Float:x, Float:y, Float:z);
-forward PED_OnStateChange(pedid, newstate, oldstate);
-forward PED_OnStreamIn(pedid, playerid);
-forward PED_OnStreamOut(pedid, playerid);
+forward PED_OnTakeDamage(pedid, issuerid, weaponid, Float:amount, bodypart);
+forward PED_OnDeath(pedid, killerid, weaponid);
+forward PED_OnStreamIn(pedid, forplayerid);
+forward PED_OnStreamOut(pedid, forplayerid);
+forward PED_OnUpdate(pedid);
+
+forward OnPlayerTargetPED(playerid, pedid, weaponid);
+forward OnPlayerGivePEDDamage(playerid, pedid, weaponid, Float:amount, bodypart);
